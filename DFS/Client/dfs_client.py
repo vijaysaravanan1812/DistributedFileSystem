@@ -6,6 +6,7 @@
 import os, rpyc
 import pandas as pd
 import ftplib
+import io
     
 cpath = r"/tmp/DFS/Client"  # Specify the client directory
 #os.chdir(cpath)     # Change the active directory of the client- location where files can be uploaded from and downloaded in the client
@@ -37,6 +38,8 @@ def connect(host,port,flag, file):
                                                     # Prints the contents & total files in the client directory AFTER download
                 elif flag==4:                       # Option 4 is for deleting a file from connected DNode
                     retcode = deletefile(ftp, file) # Calls the function that deletes the given file from it's DNode
+                elif flag == 5:  # New append operation
+                    retcode = append_to_file(ftp, file)
                 return (retcode)                    # Returns the return code from the called function    
             except:
                 print ("Incorrect Username or Password. Please try again...")  # Prints login error when incorrect credentials are entered
@@ -58,7 +61,24 @@ def upload(ftp, ufile):
     except ftplib.all_errors as error:              # Check for any ftplib error & print/ return it back
         print (error)
         return ("426-Connection closed; File action aborted")
-
+def append_to_file(ftp, filename):
+    try:
+        print("Enter text to append (Ctrl+D to finish):")
+        lines = []
+        while True:
+            try:
+                line = input()
+                lines.append(line)
+            except EOFError:
+                break
+        data = '\n'.join(lines) + '\n'  # Ensure final newline
+        print("\nAppended Data:\n", data)
+        ftp.storbinary(f"APPE {filename}", io.BytesIO(data.encode()))
+        print(f"Appended {len(data)} bytes to {filename}")
+        return '250-Append operation completed'
+    except Exception as e:
+        return f'450-Append failed: {str(e)}'
+        
 # Function to download a given file to the Client from the connected DNode
 def download(ftp, dfile):
     try:
@@ -126,13 +146,14 @@ def main():
     2. Upload a file
     3. Download a file
     4. Delete a file
+    5. Append to existing file
     0. Quit\n
 Input Opton >>> """
     while master:
         try:
             opt = input(instructions)                          # Request user for an input based on printed instructions
             opt = int(opt)                                     # Convert the user input to int
-            if opt in range(5):                                # Check if the user input is in range [0-4] 
+            if opt in range(6):                                # Check if the user input is in range [0-4] 
                 if opt== 0:
                     break                             # Option 0 Quits the program 
                 elif opt ==1:                         # Option 1 is for listing all the files across all connected DNodes 
@@ -191,7 +212,25 @@ Input Opton >>> """
                         print (xf)
                         host, port = xf.at[0,'DN_IP'], xf.at[0,'DN_Port'] + 1 # Get the details of DNode that contains the file
                         print ("Connecting to ftpserver...")
-                        msgcode=connect(host, port, opt, str(xfile))    # Connect to the DNode with required args
+                        msgcode = connect(host, port, opt, str(xfile))
+                        print(msgcode)
+                        print ("Disconnecting from server\n")
+                    except:
+                        print ("Unidentified Error")
+                elif opt == 5:
+                    
+                    flist = master.filemap()
+                    print ("List of available files: ", flist, "\n") 
+                    target_file = input("Enter filename to append: ")
+                    try:
+                        xdict = master.Matchfile(target_file)                 # Get the matched dictionary from Master Server 
+#                       print (xdict)
+#                       print (type(xdict))
+                        xf = pd.DataFrame(xdict)                        # Convert the dictionary to a pandas dataFrame
+                        print (xf)
+                        host, port = xf.at[0,'DN_IP'], xf.at[0,'DN_Port'] + 1 # Get the details of DNode that contains the file
+                        print ("Connecting to ftpserver...")
+                        msgcode=connect(host, port, opt, str(target_file))    # Connect to the DNode with required args
                         print (msgcode, "\n\n")
                         print ("Disconnecting from server\n")
                     except:
