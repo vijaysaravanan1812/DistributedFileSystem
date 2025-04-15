@@ -40,6 +40,8 @@ def connect(host,port,flag, file):
                     retcode = deletefile(ftp, file) # Calls the function that deletes the given file from it's DNode
                 elif flag == 5:  # New append operation
                     retcode = append_to_file(ftp, file)
+                elif flag == 6:
+                    retcode = readfile(ftp, file)
                 return (retcode)                    # Returns the return code from the called function    
             except:
                 print ("Incorrect Username or Password. Please try again...")  # Prints login error when incorrect credentials are entered
@@ -78,7 +80,22 @@ def append_to_file(ftp, filename):
         return '250-Append operation completed'
     except Exception as e:
         return f'450-Append failed: {str(e)}'
-        
+
+# Function to read the content of a file from the connected DNode
+def readfile(ftp, rfile):
+    try:
+        print ("Reading file content from server...")
+        content = []
+        ftp.retrlines("RETR " + rfile, content.append)
+        print ("\n--- FILE CONTENT START ---")
+        print ('\n'.join(content))
+        print ("--- FILE CONTENT END ---\n")
+        ftp.quit()
+        return ('250-Requested file read completed')
+    except ftplib.all_errors as error:
+        print (error)
+        return ("426-Connection closed; File action aborted")
+
 # Function to download a given file to the Client from the connected DNode
 def download(ftp, dfile):
     try:
@@ -147,13 +164,14 @@ def main():
     3. Download a file
     4. Delete a file
     5. Append to existing file
+    6. Read a file
     0. Quit\n
 Input Opton >>> """
     while master:
         try:
             opt = input(instructions)                          # Request user for an input based on printed instructions
             opt = int(opt)                                     # Convert the user input to int
-            if opt in range(6):                                # Check if the user input is in range [0-4] 
+            if opt in range(7):                                # Check if the user input is in range [0-4] 
                 if opt== 0:
                     break                             # Option 0 Quits the program 
                 elif opt ==1:                         # Option 1 is for listing all the files across all connected DNodes 
@@ -235,6 +253,26 @@ Input Opton >>> """
                         print ("Disconnecting from server\n")
                     except:
                         print ("Unidentified Error")
+                elif opt == 6:
+                    key = input("Enter the keyword to search the file to read [Default = List all files]: ")
+                    if key:
+                        try:
+                            match = master.Matchfile(key)
+                            mdf = pd.DataFrame(match)
+                            print(mdf)
+                        except:
+                            print ("No matching files found\n\n\n")
+                    else:
+                        match = master.filemap()
+                        print (match,"\n")
+                    rfile = input("Enter the file name to read its content: ")
+                    rdict = master.Matchfile(rfile)
+                    rf = pd.DataFrame(rdict)
+                    print(rf)
+                    host, port = rf.at[0,'DN_IP'], rf.at[0,'DN_Port'] + 1
+                    print ("Connecting to ftpserver...")
+                    msgcode = connect(host, port, opt, str(rfile))
+                    print (msgcode, "\n\n")
                 else:
                     break
         except:
