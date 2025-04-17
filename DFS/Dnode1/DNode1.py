@@ -12,13 +12,15 @@ FTP: file -> ftpserver2.py || port: 8889  (Dnode port + 1)
 ===================================================
 
 """
-import os, rpyc, subprocess
+import os, rpyc, subprocess, sys
 from datetime import  datetime as dt
 from rpyc.utils.server import ThreadedServer
 from rpyc.lib import setup_logger
 
 global IP,PORT,PATH
-IP,PORT,PATH = "127.0.0.1",8888,r'/tmp/DFS/Dnode1'
+# IP,PORT,PATH = "127.0.0.1",8888,r'/tmp/DFS/Dnode1'
+
+
 timeformat = "%Y-%m-%d %H:%M:%S"                        # Used to print Modified time for files
 
 class DNServer(rpyc.Service):
@@ -43,12 +45,25 @@ class DNServer(rpyc.Service):
             return (filelist)
 
 if __name__ == "__main__":
+    
+    if len(sys.argv) < 3:
+        print("Error: Not enough arguments.")
+        print("Usage: python script.py <IP> <PORT> <PATH> ")
+        sys.exit(1) 
+
+    # host = "127.0.0.1"
+    IP =  sys.argv[1] # Ip Address
+    PORT =  sys.argv[2] # port
+    PATH = sys.argv[3]
+
     t1 = ThreadedServer(DNServer, hostname=IP, port=PORT, protocol_config={'allow_public_attrs': True})
                                                 # 'allow_public_attrs' is needed to make the rpyc items visible. If this is not specified, it will result in errors
                                                 # .. since rpyc dicts & lists are not visible as normal dict and list 
                                                 # e.g. while converting an rpyc list of dict (filelist) to dataframe, it returns 'keys' error
     setup_logger(quiet=False, logfile=None)
-    subprocess.call("start cmd /K python ftpserver1.py", shell=True) # this opens the ftpserver1.py file in a new console window (shell=True) so that we can view the FTP logs
+    # subprocess.call("start cmd /K python ftpserver1.py", shell=True) # this opens the ftpserver1.py file in a new console window (shell=True) so that we can view the FTP logs
+    subprocess.call(f'gnome-terminal -- bash -c "python3 ftpserver1.py {IP} {int(PORT)+1} \\"{PATH}\\"; exec bash"', shell=True)
+
     t1.start()                                  # Start the DNode server
 
 """ NOTE:

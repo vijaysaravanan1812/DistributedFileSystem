@@ -15,13 +15,16 @@ from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import ThreadedFTPServer
                                                 # Threaded server is used to enable multiple ftp threads for different users
+import sys
 
-host = '127.0.0.1'
-port = 8889                                     # DNode port is 8888; FTP port is the next port 8888+1
+# host = '127.0.0.1'
+# port = 8889                                     # DNode port is 8888; FTP port is the next port 8888+1
 
-def main():
+def main(host , port, homedir ):
     authorizer = DummyAuthorizer()
-    authorizer.add_user('ftpuser', 'pass', homedir=r'/tmp/DFS/Dnode1', perm='elradfmw') # set username, password & homedirectory for the user
+    authorizer.add_user('ftpuser', 'pass', homedir, perm='elradfmw') # set username, password & homedirectory for the user
+
+    # authorizer.add_user('ftpuser', 'pass', homedir=r'C:\Users\Arup Sau\Desktop\DFS\DistributedFileSystem-main\DFS\Dnode1', perm='elradfmw') # set username, password & homedirectory for the user
     handler = FTPHandler
     handler.authorizer = authorizer
     server = ThreadedFTPServer((host,port), handler)                      # Bind the host:port for FTP services  
@@ -34,4 +37,14 @@ def stopftp():
 
 
 if __name__ == "__main__":
-    main()
+    
+    if len(sys.argv) < 3:
+        print("Error: Not enough arguments.")
+        print("Usage: python script.py <IP> <Port> <Path>")
+        sys.exit(1) 
+
+    # host = "127.0.0.1"
+    host =  sys.argv[1] # Ip Address
+    port =  sys.argv[2] # por
+    path = sys.argv[3]
+    main(host , port, path)

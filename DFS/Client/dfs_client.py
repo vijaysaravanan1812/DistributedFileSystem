@@ -1,71 +1,64 @@
 # -*- coding: utf-8 -*-
 """
-=================== CLIENT ===================
-
+=================== CLIENT WITH LOCKING ===================
 """
 import os, rpyc
 import pandas as pd
 import ftplib
 import io
-    
-cpath = r"/tmp/DFS/Client"  # Specify the client directory
-#os.chdir(cpath)     # Change the active directory of the client- location where files can be uploaded from and downloaded in the client
+from tabulate import tabulate
 
-# Function to connect to the FTP server for a DNode & then perform file actions
-def connect(host,port,flag, file):
-    print ("Host: {}, Port:{}, Opt Code: {}, filename: {}".format(host, port, flag, file))
-                                     # Takes 4 arguments: Host IP, Host FTP Port, flag containg file action, filename 
+# cpath = r"C:\Users\Arup Sau\Desktop\DFS\DistributedFileSystem-main\DFS\Client"
+cpath = r"/tmp/DFS/Client"
+def connect(host, port, flag, file):
+    print("Host: {}, Port:{}, Opt Code: {}, filename: {}".format(host, port, flag, file))
     try:
         ftp = ftplib.FTP('')
-        ftp.connect(host,int(port))  # FTP connects to the host: port  {int value of port}
+        print("connecting...\n")
+        ftp.connect(host, int(port))
+        print("connected\n")
         while True:
-            username = input("Please enter FTP username: ")   # Requests the user for FTP username
-            passwd = input("Please enter password for {} : ".format(username))   # Requests the password for entered username
+            username = input("Please enter FTP username: ")
+            passwd = input("Please enter password for {} : ".format(username))
             try:
-                ftp.login(str(username),str(passwd))
-                print ("Conencted to FTP Server {}:{}".format(host,port)) # Tries to login FTP server using given credentials
-                print ("Files in cwd:\n")   
-                ftp.dir()                           # Upon connecting, lists the contents of the root directory of the user
-                if flag==2:
-                    retcode = upload(ftp, file)     # Option 2 is for uploading a file from client to connected DNode
-                elif flag==3:                       # Option 3 is for downloading a file from connected DNode to client
-                    localfiles = getlocalfiles()     
-                    print ("Current list of local files in client:\n{}\nTotal file count = {}".format(localfiles, len(localfiles)))
-                                                    # Prints the contents & total files in the client directory BEFORE download
-                    retcode = download(ftp, file)   # Calls the function that downloads the file using ftp connection & Filename as args
-                    newlocalfiles = getlocalfiles()
-                    print ("Updated list of local files in client:\n{}\nTotal file count = {}".format(newlocalfiles, len(newlocalfiles)))
-                                                    # Prints the contents & total files in the client directory AFTER download
-                elif flag==4:                       # Option 4 is for deleting a file from connected DNode
-                    retcode = deletefile(ftp, file) # Calls the function that deletes the given file from it's DNode
-                elif flag == 5:  # New append operation
+                ftp.login(str(username), str(passwd))
+                print("Connected to FTP Server {}:{}".format(host, port))
+                print("Files in cwd:\n")
+                ftp.dir()
+                if flag == 2:
+                    retcode = upload(ftp, file)
+                elif flag == 3:
+                    retcode = download(ftp, file)
+                elif flag == 4:
+                    retcode = deletefile(ftp, file)
+                elif flag == 5:
                     retcode = append_to_file(ftp, file)
                 elif flag == 6:
                     retcode = readfile(ftp, file)
-                return (retcode)                    # Returns the return code from the called function    
+                return retcode
             except:
-                print ("Incorrect Username or Password. Please try again...")  # Prints login error when incorrect credentials are entered
-    except ftplib.all_errors as error:              # Check for any ftplib error & print/ return it back
-        print (error)
-        return (error)
+                print("Incorrect Username or Password. Please try again...")
+    except ftplib.all_errors as error:
+        print(error)
+        return error
 
-# Function to upload a given file to the connected DNode
 def upload(ftp, ufile):
     try:
-        print ("Starting upload....")
-        ftp.storbinary("STOR "+ ufile , open (ufile, 'rb')) # start uploading the file to DNode FTPserver (opens the file as read-binary in the client)
-        print ("File ", ufile, "uploaded successfully from client to DNode...\n")
-        print ("Updated files in cwd:")
-        ftp.dir()                                   # Prints the updated files in the FTP server directory after upload
-        print ("Disconnecting from server")
-        ftp.quit()                                                       # Close the FTP connection
-        return ('250-Requested file action completed')
-    except ftplib.all_errors as error:              # Check for any ftplib error & print/ return it back
-        print (error)
-        return ("426-Connection closed; File action aborted")
+        print("Starting upload....")
+        full_path = os.path.join(cpath, ufile)
+        print(ufile)
+        ftp.storbinary("STOR " + ufile, open( full_path , 'rb'))
+        print("File", ufile, "uploaded successfully.")
+        ftp.dir()
+        ftp.quit()
+        return '250-Requested file action completed'
+    except ftplib.all_errors as error:
+        print(error)
+        return "426-Connection closed; File action aborted"
+
 def append_to_file(ftp, filename):
     try:
-        print("Enter text to append (Ctrl+D to finish):")
+        print("Enter text to append (Press Ctrl+Z then Enter to finish):")
         lines = []
         while True:
             try:
@@ -73,75 +66,72 @@ def append_to_file(ftp, filename):
                 lines.append(line)
             except EOFError:
                 break
-        data = '\n'.join(lines) + '\n'  # Ensure final newline
-        print("\nAppended Data:\n", data)
+        data = '\n'.join(lines) + '\n'
         ftp.storbinary(f"APPE {filename}", io.BytesIO(data.encode()))
         print(f"Appended {len(data)} bytes to {filename}")
         return '250-Append operation completed'
     except Exception as e:
         return f'450-Append failed: {str(e)}'
 
-# Function to read the content of a file from the connected DNode
 def readfile(ftp, rfile):
-    try:
-        print ("Reading file content from server...")
+    try: 
         content = []
         ftp.retrlines("RETR " + rfile, content.append)
-        print ("\n--- FILE CONTENT START ---")
-        print ('\n'.join(content))
-        print ("--- FILE CONTENT END ---\n")
+        print("\n--- FILE CONTENT START ---")
+        print('\n'.join(content))
+        print("--- FILE CONTENT END ---\n")
         ftp.quit()
-        return ('250-Requested file read completed')
+        return '250-Requested file read completed'
     except ftplib.all_errors as error:
-        print (error)
-        return ("426-Connection closed; File action aborted")
+        print(error)
+        return "426-Connection closed; File action aborted"
 
-# Function to download a given file to the Client from the connected DNode
 def download(ftp, dfile):
     try:
-        print ("Starting download....")
-        ftp.retrbinary("RETR " + dfile, open (dfile, 'wb').write, 1024)  # start downloading the file from DNode FTPserver 
-                                                                         # opens the file as write-binary in the client, writing 1024 blocks at a time (buffer)
-        print ("File ", dfile, "Downloaded successfully from DNode to client...")
-        print ("Disconnecting from server")
-        ftp.quit()                                                       # Close the FTP connection
-        return ('250-Requested file action completed')
-    except ftplib.all_errors as error:              # Check for any ftplib error & print/ return it back
-        print (error)
-        return ("426-Connection closed; File action aborted")
+        ftp.retrbinary("RETR " + dfile, open(dfile, 'wb').write, 1024)
+        print("Downloaded", dfile, "successfully.")
+        ftp.quit()
+        return '250-Requested file action completed'
+    except ftplib.all_errors as error:
+        print(error)
+        return "426-Connection closed; File action aborted"
 
-# Function to delete a given file from it's DNode
 def deletefile(ftp, xfile):
     try:
-        print ("Deleting file...")
-        ftp.delete(xfile)                           # Deletes the given file from it's DNode
-        print ("File ", xfile, "deleted successfully...")
-        print ("Updated files in cwd:")             # Prints the updated files in the FTP server directory after deletion
+        ftp.delete(xfile)
+        print("Deleted", xfile, "successfully.")
         ftp.dir()
-        print ("Disconnecting from server")
-        ftp.quit()                                                       # Close the FTP connection
-        return ('250-Requested file action completed') 
-    except ftplib.all_errors as error:              # Check for any ftplib error & print/ return it back
-        print (error)
-        return ("426-Connection closed; File action aborted")
-    
-    
-# Function to get the list of files from the local client directory
-def getlocalfiles():
-    flist = []                                           # Create a blank list               
-    for (dirpath, dirnames, filename) in os.walk(cpath): # Iterate through the folder, file in the given client path
-        for file in filename:
-            flist.append(file)                           # append each file to the list                              
-    return (flist)                                       # Return the updated file list                   
+        ftp.quit()
+        return '250-Requested file action completed'
+    except ftplib.all_errors as error:
+        print(error)
+        return "426-Connection closed; File action aborted"
 
-# Function to get the details of a randomly selected DNode for file upload 
+def getlocalfiles():
+    flist = []
+    for (dirpath, dirnames, filename) in os.walk(cpath):
+        for file in filename:
+            flist.append(file)
+   
+    return flist
+
 def get_DNode_info(master):
-    dnode = master.select_dn()              # Calls the exposed function in the Master server 
-    print ("""Selected Data Node:
+    dnode = master.select_dn()
+    print("""Selected Data Node:
         Node_IP:{}
         Node_Port:{}
-        Node_Directory: {}\n""".format(dnode[0],dnode[1],dnode[2]))
-    return (dnode[0],dnode[1],dnode[2])     # Return the details of the selected DNode
+        Node_Directory: {}\n""".format(dnode[0], dnode[1], dnode[2]))
+    return (dnode[0], dnode[1], dnode[2])
+
+def perform_with_lock(master, filename, mode, fn):
+    if master.acquire_lock(filename, mode):
+        try:
+            return fn()
+        finally:
+            master.release_lock(filename, mode)
+    else:
+        print(f" File is locked for {mode}. Try again later.")
+        return None
 
 def main():
     host = input("Enter the server IP [Default = 127.0.0.1]:") # Requests the user to input the IP of the Master server to be connected
@@ -157,127 +147,81 @@ def main():
     con=rpyc.connect(host,port)                                # Connect to the Master server IP: Port
     print ("Connected to MasterServer [{}]:{}".format(host,port))
     master=con.root.Master()                                   # Allows calling of exposed remote Master server functions
-                                    # Instructions for Reuse
-    instructions = """Please select an option [0-4]:
+                     
+    instructions = """Please select an option [0-6]:
     1. Get file list
     2. Upload a file
     3. Download a file
     4. Delete a file
-    5. Append to existing file
+    5. Append and Write
     6. Read a file
     0. Quit\n
-Input Opton >>> """
+Input Option >>> """
+
     while master:
         try:
-            opt = input(instructions)                          # Request user for an input based on printed instructions
-            opt = int(opt)                                     # Convert the user input to int
-            if opt in range(7):                                # Check if the user input is in range [0-4] 
-                if opt== 0:
-                    break                             # Option 0 Quits the program 
-                elif opt ==1:                         # Option 1 is for listing all the files across all connected DNodes 
-                    flist = master.filemap()                   # Get the file list across all DNodes from the Master server function
-                    with pd.option_context('max_colwidth', 1000, 'display.max_columns', 500):
-                        print (flist,"\n\n\n")                 # Print the dataframe with all file info 
-                elif opt ==2:                         # Option 2 is for uploading a file from client to connected DNode       
-                    print ("Fetching upload server details...")
-                    DN_HOST,DN_PORT,DN_PATH = get_DNode_info(master) # Get a random DNode server to upload the file
-                    ftpport = DN_PORT + 1                            # FTP port for each DNode is the following port of the DNode rpyc server
-                    localfiles = getlocalfiles()                     # Prints the contents & total files in the client directory for user to select
-                    print (localfiles)
-                    ufile = input("Please enter the filename to upload to DNode: ") # Request user to enter the filename to be uploaded
-                    if ufile in localfiles:                                         # Check if the user input filename exists in the local directory
-                        try:
-                            print ("Connecting to ftpserver...")
-                            msgcode = connect(DN_HOST, ftpport, opt, str(ufile))    # If file exists, share the required args to Connect() function
-                            print (msgcode, "\n\n")                                 # Print the returned code from the Connect() function    
-                        except ftplib.error_perm as error:
-                            print (error)                                           # Print any file permission errors encountered during upload
-                    else:
-                        print ("No such file found at ", cpath, "\n\n\n")           # Print error message if no file found
-                elif opt ==3:
-                    key = input("Enter the keyword to search the required file for download [Default = List all files] : ")
-                                                                        # Reuqest user for a keyword search - this matches the keyword to all files across all DNodes
-                    if key:
-                        try:
-                            match = master.Matchfile(key)               # Match the user input with the filenames using Master server function
-                            mdf = pd.DataFrame(match)
-                            print(mdf)
-                        except:
-                            print ("No matching files found\n\n\n")     # Print error if no file match found
-                    else:
-                        match = master.filemap()                        # In case of no user input, display all files across all DNodes
-                        print (match,"\n")
-                    dfile = input("Please enter the filename to be downloaded to client: ") # Request user input for name of file to be uploaded
-                    mdict = master.Matchfile(dfile)                     # Get the matched dictionary from Master Server 
-#                    print (mdict)
-#                    print (type(mdict))
-                    mf = pd.DataFrame(mdict)                            # Convert the dictionary to a pandas dataFrame
-#                    print (type(mf))
-                    print (mf)
-                    host, port = mf.at[0,'DN_IP'], mf.at[0,'DN_Port'] + 1 # Get the details of DNode that contains the file
-                    print ("Connecting to ftpserver...")
-                    msgcode = connect(host, port, opt, str(dfile))      # Connect to the DNode with required args
-                    print (msgcode, "\n\n")
-                elif opt == 4:                        # Option 4 is for deleting a file from connected DNode
-                    flist = master.filemap()
-                    print ("List of available files: ", flist, "\n")    # Print the currently available files
-                    xfile = input("Name of the file to be deleted: ")
+            opt = int(input(instructions))
+            if opt == 0:
+                break
+            elif opt == 1:
+                flist = master.filemap()
+                print(tabulate(flist, headers='keys', tablefmt='psql'))
+                # with pd.option_context('max_colwidth', 1000, 'display.max_columns', 500):
+                #     print(flist)
+            elif opt == 2:
+                print ("Fetching upload server details...")
+                DN_HOST,DN_PORT,DN_PATH = get_DNode_info(master) # Get a random DNode server to upload the file
+                ftpport = DN_PORT + 1                            # FTP port for each DNode is the following port of the DNode rpyc server
+                localfiles = getlocalfiles()                     # Prints the contents & total files in the client directory for user to select
+                print (localfiles)
+                ufile = input("Please enter the filename to upload to DNode: ") # Request user to enter the filename to be uploaded
+                print(ufile)
+                if ufile in localfiles:                                         # Check if the user input filename exists in the local directory
                     try:
-                        xdict = master.Matchfile(xfile)                 # Get the matched dictionary from Master Server 
-#                        print (xdict)
-#                        print (type(xdict))
-                        xf = pd.DataFrame(xdict)                        # Convert the dictionary to a pandas dataFrame
-                        print (xf)
-                        host, port = xf.at[0,'DN_IP'], xf.at[0,'DN_Port'] + 1 # Get the details of DNode that contains the file
                         print ("Connecting to ftpserver...")
-                        msgcode = connect(host, port, opt, str(xfile))
-                        print(msgcode)
-                        print ("Disconnecting from server\n")
-                    except:
-                        print ("Unidentified Error")
-                elif opt == 5:
-                    
-                    flist = master.filemap()
-                    print ("List of available files: ", flist, "\n") 
-                    target_file = input("Enter filename to append: ")
-                    try:
-                        xdict = master.Matchfile(target_file)                 # Get the matched dictionary from Master Server 
-#                       print (xdict)
-#                       print (type(xdict))
-                        xf = pd.DataFrame(xdict)                        # Convert the dictionary to a pandas dataFrame
-                        print (xf)
-                        host, port = xf.at[0,'DN_IP'], xf.at[0,'DN_Port'] + 1 # Get the details of DNode that contains the file
-                        print ("Connecting to ftpserver...")
-                        msgcode=connect(host, port, opt, str(target_file))    # Connect to the DNode with required args
-                        print (msgcode, "\n\n")
-                        print ("Disconnecting from server\n")
-                    except:
-                        print ("Unidentified Error")
-                elif opt == 6:
-                    key = input("Enter the keyword to search the file to read [Default = List all files]: ")
-                    if key:
-                        try:
-                            match = master.Matchfile(key)
-                            mdf = pd.DataFrame(match)
-                            print(mdf)
-                        except:
-                            print ("No matching files found\n\n\n")
-                    else:
-                        match = master.filemap()
-                        print (match,"\n")
-                    rfile = input("Enter the file name to read its content: ")
-                    rdict = master.Matchfile(rfile)
-                    rf = pd.DataFrame(rdict)
-                    print(rf)
-                    host, port = rf.at[0,'DN_IP'], rf.at[0,'DN_Port'] + 1
-                    print ("Connecting to ftpserver...")
-                    msgcode = connect(host, port, opt, str(rfile))
-                    print (msgcode, "\n\n")
+                        msgcode = connect(DN_HOST, ftpport, opt, str(ufile))    # If file exists, share the required args to Connect() function
+                        print (msgcode, "\n\n")                                 # Print the returned code from the Connect() function    
+                    except ftplib.error_perm as error:
+                        print (error)                                           # Print any file permission errors encountered during upload
                 else:
-                    break
-        except:
-            print ("Unidentified input")                # Print error if user input is out of range or not a digit
-    print ("Quitting Program\nThank you!")              # Print if Opt=0 & quit
+                    print ("No such file found at ", cpath, "\n\n\n")           # Print error message if no file found
+            elif opt == 3:
+                key = input("Search keyword [Enter to list all]: ")
+                match = master.Matchfile(key) if key else master.filemap()
+                print(pd.DataFrame(match))
+                dfile = input("Enter filename to download: ")
+                md = pd.DataFrame(master.Matchfile(dfile))
+                host, port = md.at[0, 'DN_IP'], int(md.at[0, 'DN_Port']) + 1
+                perform_with_lock(master, dfile, 'read', lambda: connect(host, port, opt, dfile))
+            elif opt == 4:
+                flist = master.filemap()
+                print(flist)
+                xfile = input("Enter file to delete: ")
+                xf = pd.DataFrame(master.Matchfile(xfile))
+                host, port = xf.at[0, 'DN_IP'], int(xf.at[0, 'DN_Port']) + 1
+                perform_with_lock(master, xfile, 'write', lambda: connect(host, port, opt, xfile))
+            elif opt == 5:
+                flist = master.filemap()
+                print(flist)
+                target_file = input("Enter filename to append: ")
+                xf = pd.DataFrame(master.Matchfile(target_file))
+                host, port = xf.at[0, 'DN_IP'], int(xf.at[0, 'DN_Port']) + 1
+                perform_with_lock(master, target_file, 'write', lambda: connect(host, port, opt, target_file))
+            elif opt == 6:
+                key = input("Search keyword to read [Enter to list all]: ")
+                match = master.Matchfile(key) if key else master.filemap()
+                print(pd.DataFrame(match))
+                rfile = input("Enter filename to read: ")
+                rf = pd.DataFrame(master.Matchfile(rfile))
+                print("connecting...\n")
+                host, port = rf.at[0, 'DN_IP'], int( rf.at[0, 'DN_Port']) + 1
+                print("connected...\n")
+                perform_with_lock(master, rfile, 'read', lambda: connect(host, port, opt, rfile))
+                print("connecting...\n")
+        except Exception as e:
+            print("Error:", e)
+
+    print("Quitting Program. Thank you!")
 
 if __name__ == "__main__":
-    main()                                              # Call & execute main program
+    main()
